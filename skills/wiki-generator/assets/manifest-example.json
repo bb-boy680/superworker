@@ -1,0 +1,151 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "my-project",
+    "type": "react",
+    "root": "/path/to/project",
+    "detectedAt": "2024-01-15T10:30:00Z"
+  },
+
+  "phases": [
+    {
+      "name": "discovery",
+      "description": "发现项目文件",
+      "status": "completed",
+      "startedAt": "2024-01-15T10:30:00Z",
+      "completedAt": "2024-01-15T10:31:15Z"
+    },
+    {
+      "name": "analysis",
+      "description": "分析文件依赖和模块",
+      "status": "in_progress",
+      "startedAt": "2024-01-15T10:31:20Z",
+      "completedAt": null
+    },
+    {
+      "name": "generation",
+      "description": "生成文档",
+      "status": "pending",
+      "startedAt": null,
+      "completedAt": null
+    },
+    {
+      "name": "validation",
+      "description": "验证文档完整性",
+      "status": "pending",
+      "startedAt": null,
+      "completedAt": null
+    }
+  ],
+
+  "fileInventory": {
+    "total": 156,
+    "categorized": 142,
+    "orphan": 14,
+    "byType": {
+      "pages": 23,
+      "components": 67,
+      "api": 18,
+      "utils": 21,
+      "hooks": 12,
+      "types": 15
+    }
+  },
+
+  "modules": [
+    {
+      "id": "mod-001",
+      "name": "用户管理",
+      "description": "用户注册、登录、资料管理",
+      "status": "completed",
+      "entry": {
+        "path": "src/pages/User/index.tsx",
+        "lineCount": 245,
+        "lastModified": "2024-01-10T08:20:00Z"
+      },
+      "files": {
+        "pages": ["src/pages/User/index.tsx", "src/pages/User/Profile.tsx"],
+        "components": [
+          "src/components/User/UserList.tsx",
+          "src/components/User/UserForm.tsx",
+          "src/components/User/UserCard.tsx"
+        ],
+        "api": ["src/api/user.ts"],
+        "types": ["src/types/user.ts"],
+        "store": ["src/store/userSlice.ts"],
+        "utils": ["src/utils/userValidation.ts"]
+      },
+      "dependencies": {
+        "internal": ["mod-002", "mod-005"],
+        "external": ["axios", "react-query"]
+      },
+      "output": {
+        "path": "wiki/modules/user-management.md",
+        "generatedAt": "2024-01-15T10:45:00Z",
+        "lineCount": 180,
+        "sections": 8
+      }
+    },
+    {
+      "id": "mod-002",
+      "name": "权限管理",
+      "description": "角色、权限、访问控制",
+      "status": "in_progress",
+      "entry": {
+        "path": "src/pages/Auth/index.tsx",
+        "lineCount": 189,
+        "lastModified": "2024-01-12T14:30:00Z"
+      },
+      "files": {
+        "pages": ["src/pages/Auth/index.tsx"],
+        "components": ["src/components/Auth/PermissionGate.tsx"],
+        "api": ["src/api/auth.ts"],
+        "hooks": ["src/hooks/useAuth.ts"]
+      },
+      "output": null
+    },
+    {
+      "id": "mod-003",
+      "name": "订单管理",
+      "description": "订单创建、支付、查询",
+      "status": "pending",
+      "entry": {
+        "path": "src/pages/Order/index.tsx",
+        "lineCount": 312,
+        "lastModified": "2024-01-08T11:15:00Z"
+      },
+      "files": {},
+      "output": null
+    }
+  ],
+
+  "progress": {
+    "modules": {
+      "total": 12,
+      "completed": 1,
+      "inProgress": 1,
+      "pending": 10,
+      "failed": 0
+    },
+    "files": {
+      "total": 156,
+      "documented": 24,
+      "pending": 132
+    },
+    "currentTask": "正在分析模块：权限管理 (mod-002)"
+  },
+
+  "validation": {
+    "passed": 0,
+    "failed": 0,
+    "warnings": 0,
+    "issues": [
+      {
+        "type": "missing_doc",
+        "severity": "warning",
+        "file": "src/utils/date.ts",
+        "message": "工具函数未被任何模块引用"
+      }
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "skill_name": "debugger",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我的 Python 程序抛出了 KeyError，但我确定键存在，帮我看看是什么原因",
+      "expected_output": "分析 KeyError 的可能原因，提供排查思路和解决方案",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "prompt": "这段代码在并发环境下偶尔会出现数据不一致的问题，帮我调试一下",
+      "expected_output": "分析并发问题，找出竞态条件，提供修复建议",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 3,
+      "prompt": "API 响应时间有时候很慢，怎么找出性能瓶颈？",
+      "expected_output": "提供性能分析方法和工具建议，帮助定位慢查询或耗时操作",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}
