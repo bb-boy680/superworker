@@ -2,6 +2,8 @@
 
 根据项目类型选择对应的埋点代码。
 
+> **注意**：关于埋点的强制规则（独立折叠块、禁止外部依赖等），详见 `SKILL.md` 的"插入埋点代码块"章节。本文件只提供代码示例。
+
 ---
 
 ## Session ID 生成
@@ -42,16 +44,13 @@ backend:
 
 ```javascript
 // #region DEBUG [sessionId: {{sessionId}}, port: {{port}}]
-fetch('http://localhost:{{port}}/debug/log', {
+fetch('http://localhost:{{port}}/debug/log?session_id={{sessionId}}', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    sessionId: '{{sessionId}}',
-    file: '文件名.js',
-    line: 10,
-    func: '函数名',
-    vars: { /* 变量快照 */ },
-    timestamp: Date.now()
+    location: '文件名.js:10',
+    message: '[函数入口:进入handleClick]',
+    data: { /* 变量快照 */ }
   })
 }).catch(() => {});
 // #endregion DEBUG
@@ -61,16 +60,13 @@ fetch('http://localhost:{{port}}/debug/log', {
 
 ```javascript
 // #region DEBUG [sessionId: {{sessionId}}, port: {{port}}]
-fetch('http://localhost:{{port}}/debug/log', {
+fetch('http://localhost:{{port}}/debug/log?session_id={{sessionId}}', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    sessionId: '{{sessionId}}',
-    file: '组件名.vue',
-    line: 25,
-    func: 'methodName',
-    vars: { data: this.someData },
-    timestamp: Date.now()
+    location: '组件名.vue:25',
+    message: '[方法调用:执行methodName]',
+    data: { data: this.someData }
   })
 }).catch(() => {});
 // #endregion DEBUG
@@ -80,16 +76,13 @@ fetch('http://localhost:{{port}}/debug/log', {
 
 ```javascript
 // #region DEBUG [sessionId: {{sessionId}}, port: {{port}}]
-fetch('http://localhost:{{port}}/debug/log', {
+fetch('http://localhost:{{port}}/debug/log?session_id={{sessionId}}', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    sessionId: '{{sessionId}}',
-    file: '组件名.jsx',
-    line: 18,
-    func: '函数名',
-    vars: { state, props },
-    timestamp: Date.now()
+    location: '组件名.jsx:18',
+    message: '[渲染:组件渲染]',
+    data: { state, props }
   })
 }).catch(() => {});
 // #endregion DEBUG
@@ -107,11 +100,9 @@ import json
 import time
 with open(f'.worker/debug/logs/{{sessionId}}.log', 'a', encoding='utf-8') as f:
     f.write(json.dumps({
-        'sessionId': '{{sessionId}}',
-        'file': __file__,
-        'line': 10,
-        'func': '函数名',
-        'vars': { /* 变量快照 */ },
+        'location': f'{__file__}:10',
+        'message': '[函数入口:进入函数]',
+        'data': { /* 变量快照 */ },
         'timestamp': time.time()
     }, ensure_ascii=False) + '\n')
 # #endregion DEBUG
@@ -119,6 +110,7 @@ with open(f'.worker/debug/logs/{{sessionId}}.log', 'a', encoding='utf-8') as f:
 
 ### Node.js
 
+**CommonJS (require):**
 ```javascript
 // #region DEBUG [sessionId: {{sessionId}}]
 const fs = require('fs');
@@ -126,14 +118,27 @@ const path = require('path');
 fs.appendFileSync(
   path.join('.worker/debug/logs', '{{sessionId}}.log'),
   JSON.stringify({
-    sessionId: '{{sessionId}}',
-    file: __filename,
-    line: 10,
-    func: '函数名',
-    vars: { /* 变量快照 */ },
+    location: `${__filename}:10`,
+    message: '[函数入口:进入函数]',
+    data: { /* 变量快照 */ },
     timestamp: Date.now()
   }) + '\n'
 );
+// #endregion DEBUG
+```
+
+**ES Modules / TypeScript (动态 import):**
+```typescript
+// #region DEBUG [sessionId: {{sessionId}}]
+import('fs').then((fs) => {
+  const log = {
+    location: `${__filename}:10`,
+    message: '[函数入口:进入函数]',
+    data: { /* 变量快照 */ },
+    timestamp: Date.now()
+  };
+  fs.appendFileSync('.worker/debug/logs/{{sessionId}}.log', JSON.stringify(log) + '\n');
+}).catch(() => {});
 // #endregion DEBUG
 ```
 
@@ -145,11 +150,10 @@ try {
     java.nio.file.Files.writeString(
         java.nio.file.Paths.get(".worker/debug/logs/{{sessionId}}.log"),
         String.format(
-            "{\"sessionId\":\"%s\",\"file\":\"%s\",\"line\":%d,\"func\":\"%s\",\"timestamp\":%d}%n",
-            "{{sessionId}}",
+            "{\"location\":\"%s:%d\",\"message\":\"%s\",\"data\":{},\"timestamp\":%d}%n",
             "文件名.java",
             10,
-            "函数名",
+            "[函数入口:进入函数]",
             System.currentTimeMillis()
         ),
         java.nio.file.StandardOpenOption.CREATE,
@@ -170,11 +174,9 @@ import (
 )
 f, _ := os.OpenFile(".worker/debug/logs/{{sessionId}}.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 json.NewEncoder(f).Encode(map[string]interface{}{
-    "sessionId": "{{sessionId}}",
-    "file": "文件名.go",
-    "line": 10,
-    "func": "函数名",
-    "vars": map[string]interface{}{ /* 变量快照 */ },
+    "location": "文件名.go:10",
+    "message": "[函数入口:进入函数]",
+    "data": map[string]interface{}{ /* 变量快照 */ },
     "timestamp": time.Now().UnixMilli(),
 })
 f.Close()
@@ -204,14 +206,18 @@ sed -i '/#region DEBUG/,/#endregion DEBUG/d' 文件名
 
 ```json
 {
-  "sessionId": "会话ID",
-  "file": "相对路径/文件名",
-  "line": 10,
-  "func": "函数名",
-  "vars": { "关键变量快照": "值" },
+  "location": "相对路径/文件名:行号",
+  "message": "[范围:描述]",
+  "data": { "关键变量快照": "值" },
   "timestamp": 1712345678901
 }
 ```
+
+**字段说明：**
+- `location`: 代码位置，格式为 `文件名:行号`
+- `message`: 描述信息，格式为 `[范围:描述]`，例如 `[函数入口:进入handleClick]`、`[变量检查:user对象]`、`[分支判断:if条件为真]`
+- `data`: 关键变量数据快照，任意键值对
+- `timestamp`: 时间戳（可选，毫秒）
 
 ---
 
@@ -230,18 +236,42 @@ sed -i '/#region DEBUG/,/#endregion DEBUG/d' 文件名
 ```javascript
 function yourFunction(arg) {
   // #region DEBUG [sessionId: xxx, port: yyy]
-  fetch(... line: 2 ...)  // 函数入口
+  fetch('http://localhost:yyy/debug/log?session_id=xxx', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location: '文件名.js:2',
+      message: '[函数入口:进入yourFunction]',
+      data: { arg }
+    })
+  }).catch(() => {});
   // #endregion DEBUG
 
   if (condition) {
     // #region DEBUG [sessionId: xxx, port: yyy]
-    fetch(... line: 5 ...)  // 分支
+    fetch('http://localhost:yyy/debug/log?session_id=xxx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: '文件名.js:5',
+        message: '[分支判断:if条件为真]',
+        data: { condition }
+      })
+    }).catch(() => {});
     // #endregion DEBUG
   }
 
   const result = calc();
   // #region DEBUG [sessionId: xxx, port: yyy]
-  fetch(... line: 10, vars: { result } ...)  // 变量赋值后
+  fetch('http://localhost:yyy/debug/log?session_id=xxx', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location: '文件名.js:10',
+      message: '[变量赋值:calc结果]',
+      data: { result }
+    })
+  }).catch(() => {});
   // #endregion DEBUG
 
   return result;

@@ -1,6 +1,6 @@
 ---
 name: wiki-generator
-description: 从项目工程代码库生成专业、企业级的 wiki 文档。当用户需要创建文档、生成项目 wiki、记录代码库、创建新人入职文档或从代码构建知识库时使用。对于需要标准化文档的工程团队至关重要。
+description: 从项目代码库生成企业级 wiki 文档。当用户提到以下任一内容时必须使用：生成文档、创建 wiki、项目文档、代码文档、技术文档、新人入职文档、知识库、写文档、文档生成、文档整理、模块文档、API 文档。适用于 React/Vue/Node/Python/Go/Java 等任何项目类型。如果用户想从代码生成任何形式的文档，立即使用此 skill。
 metadata:
   compatibility:
     tools:
@@ -9,374 +9,283 @@ metadata:
       - Grep
       - Edit
       - Write
+      - Agent
     requires:
       - git 仓库或项目目录
 ---
 
-# Wiki 生成器
+# Wiki 生成器（全 Subagent 版本）
 
-从任何项目代码库生成全面、企业级的 wiki 文档，支持嵌套目录结构和按功能模块聚合。
+从任何项目代码库生成全面、企业级的 wiki 文档，采用主控-子代理架构。
 
-## 功能特性
+**核心原则**：
+- 主控（你）**只调度，不执行具体任务**
+- 每个具体任务派生独立 Subagent 执行
+- 主控读取 Subagent 返回的状态，决定下一步
 
-- **多层级目录**: 支持 wiki/zh/大模块/子模块/文档.md 的嵌套结构
-- **智能聚合**: 按目录、路由、依赖关系自动聚合相关文件为模块
-- **进度追踪**: 实时显示处理进度，确保不遗漏任何文件
-- **多语言支持**: 支持生成多语言版本的文档
-- **企业标准**: 符合企业级文档规范
+---
 
-## 工作流程
+## 快速开始
 
-### Phase 1: Discovery（发现阶段）
+当用户要求生成 wiki 时，按以下步骤执行：
 
-扫描项目，识别类型，收集所有源文件。
+## Phase 1: 文件收集
 
-```
-1. 检测项目类型
-   - 读取 package.json / pom.xml / go.mod / requirements.txt 等特征文件
-   - 根据特征确定项目类型（React/Vue/Node/Python/Java/Go 等）
+**你必须使用 Agent 工具派生 Subagent，而不是自己执行。**
 
-2. 匹配文件模式
-   - 根据项目类型，执行对应的 Glob 模式
-   - 收集所有源文件路径
-   - 记录每个文件：路径、大小、修改时间
+### 1.1 派生文件收集器
 
-3. 生成分组候选
-   - 按目录结构分组
-   - 按路由配置分组（前端项目）
-   - 按依赖关系分组
+使用 Agent 工具，读取 `agents/file-collector.md`，然后执行：
 
-4. 输出清单
-   - 写入 .wiki-generator/manifest.json
-   - 包含：项目信息、文件清单、模块候选、进度状态
+```javascript
+// 使用 Agent 工具调用
+{
+  "description": "收集项目文件路径",
+  "prompt": "你是一个文件收集器 Agent。\n\n你的任务：\n1. 检查 .worker/wiki/config.yaml 是否存在\n2. 运行 node scripts/collect-files.js\n3. 验证生成的 .worker/wiki/temp/files-index.json\n4. 返回 JSON 格式的结果：{status, totalFiles, error?}",
+  "subagent_type": "general-purpose"
+}
 ```
 
-### Phase 2: Analysis（分析阶段）
+### 1.2 处理结果
 
-读取关键文件，提取文档所需信息，确定最终模块划分。
+**等待 Subagent 返回后**：
 
-```
-1. 读取并分析文件
-   For each module in manifest.modules:
-     a. 读取入口文件：提取功能描述、导出内容
-     b. 读取组件文件：提取 Props、事件、用法
-     c. 读取 API 文件：提取接口定义、参数、返回值
-     d. 读取类型文件：提取数据模型、枚举
+- **如果返回 success**：
+  - 记录 `totalFiles`
+  - 输出：`✓ Phase 1 完成：收集到 {totalFiles} 个文件`
+  - 进入 Phase 2
 
-2. 模块聚合（关键步骤）
-   策略 A - 目录聚合:
-     - src/cli/ 下的所有文件 → CLI系统模块
-     - src/mcp/ 下的所有文件 → MCP系统模块
+- **如果返回 failed**：
+  - 输出错误信息
+  - 中止执行，提示用户修复问题
 
-   策略 B - 路由聚合:
-     - 读取路由配置
-     - 每个路由 + 其组件 → 一个业务模块
+---
 
-   策略 C - 依赖聚合:
-     - 分析 import 关系
-     - 经常一起引用的文件 → 同一模块
+## Phase 2: 模块识别
 
-3. 建立依赖图
-   - 记录模块间依赖
-   - 记录文件归属关系
+### 2.1 派生模块聚类器
 
-4. 实时更新清单
-   - 每完成一个模块，更新 manifest.json
-   - 输出进度："已完成 3/12 模块分析"
+使用 Agent 工具，读取 `agents/module-clusterer.md`：
+
+```javascript
+{
+  "description": "识别模块边界",
+  "prompt": "你是一个模块聚类器 Agent。\n\n你的任务：\n1. 读取 .worker/wiki/temp/files-index.json\n2. AI 语义分析，识别业务模块、共享模块、配置模块\n3. 为每个模块确定入口文件\n4. 输出到 .worker/wiki/meta/modules.json\n5. 返回 JSON: {status, totalModules, modules[], orphanFiles[]}\n\n注意：\n- 基于文件路径进行语义分析\n- 不要读取文件内容，只分析路径\n- 模块名用中文",
+  "subagent_type": "general-purpose"
+}
 ```
 
-### Phase 3: Generation（生成阶段）
+### 2.2 处理结果
 
-生成嵌套目录结构和模块文档。
+**等待返回后**：
 
-```
-1. 创建目录结构
-   wiki/
-   ├── config.yaml              # 配置文件
-   ├── meta/                    # 元数据目录
-   │   ├── manifest.json        # 文件清单
-   │   ├── progress.json        # 进度追踪
-   │   └── search-index.json    # 搜索索引
-   └── {lang}/                  # 语言目录（如 zh/）
-       ├── README.md            # 项目首页
-       ├── 文档地图.md          # 全局导航
-       ├── 快速开始.md          # 快速入门
-       ├── 架构设计.md          # 架构概览
-       ├── 开发指南.md          # 开发规范
-       │
-       ├── {大功能模块A}/       # 业务模块目录
-       │   ├── README.md        # 模块概述
-       │   ├── {子模块1}.md     # 具体文档
-       │   ├── {子模块2}.md
-       │   └── assets/          # 模块专属资源
-       │       └── diagram.png
-       │
-       ├── {大功能模块B}/
-       │   └── ...
-       │
-       └── shared/              # 跨模块内容
-           ├── 术语表.md
-           ├── 常见问题.md
-           └── 更新日志.md
+- **如果返回 success**：
+  - 读取 `.worker/wiki/meta/modules.json`
+  - 记录 `totalModules`
+  - 输出：`✓ Phase 2.1 完成：识别到 {totalModules} 个模块`
+  - 进入 Phase 2.2
 
-2. 生成模块文档
-   - 每个大模块一个目录
-   - 模块内按类型组织（页面/组件/API/类型）
-   - 支持多级嵌套（最多 3 层）
+---
 
-3. 生成交叉引用
-   - 模块间链接
-   - 文件依赖图
+## Phase 3: 模块分析（并行）
 
-4. 实时输出进度
-   - "正在生成：用户管理模块文档 (4/12)"
-   - 更新 progress.json
+**关键：为每个模块并行派生分析器**
+
+### 3.1 读取模块列表
+
+使用 Read 工具读取 `.worker/wiki/meta/modules.json`：
+
+```javascript
+const modulesData = JSON.parse(
+  fs.readFileSync('.worker/wiki/meta/modules.json')
+);
+const modules = modulesData.modules;
 ```
 
-### Phase 4: Validation（验证阶段）
+### 3.2 并行派生分析器
 
-确保文档完整性，无遗漏。
+**一次最多并行 5 个**（避免过度消耗资源）：
 
-```
-1. 覆盖率检查
-   - 对比原始文件清单和生成的文档
-   - 计算覆盖率：98% (153/156 文件)
+```javascript
+// 分批并行处理
+const batchSize = 5;
+for (let i = 0; i < modules.length; i += batchSize) {
+  const batch = modules.slice(i, i + batchSize);
 
-2. 完整性检查
-   - 检查空章节
-   - 检查缺失的 API/组件文档
+  // 使用多个 Agent 工具并行执行
+  const results = await Promise.all(
+    batch.map(module => Agent({
+      description: `分析模块: ${module.name}`,
+      prompt: `你是一个模块分析器 Agent。\n\n模块信息:\n- 名称: ${module.name}\n- 类型: ${module.type}\n- 入口文件: ${module.entry}\n- 文件列表: ${module.files.join(', ')}\n\n你的任务：\n1. 读取入口文件和相关文件（最多5个）\n2. 提取导出内容、组件、API、类型\n3. 分析依赖关系\n4. 生成功能描述\n5. 输出到 .worker/wiki/meta/analysis/${module.name}.json\n6. 返回 JSON: {status, exportsCount, componentsCount, error?}`,
+      subagent_type: "general-purpose"
+    }))
+  );
 
-3. 输出验证报告
-   - 列出警告和问题
-   - 提供修复建议
-```
-
-## 执行指令
-
-当用户要求生成 wiki 时：
-
-### Step 1: 读取配置
-
-检查 `.worker/wiki/config.yaml` 或 `wiki-config.yaml`：
-
-```yaml
-include:
-  - "**/src/**"
-  - "**/scripts/**"
-
-exclude:
-  - ".git"
-  - "node_modules"
-  - "dist"
-
-structure:
-  maxDepth: 3
-  moduleIndicators:
-    - "src/**/"
-    - "app/**/"
+  // 记录结果
+  results.forEach((result, idx) => {
+    const module = batch[idx];
+    console.log(`模块 ${module.name}: ${result.status}`);
+  });
+}
 ```
 
-### Step 2: 执行 Discovery
+### 3.3 处理结果
 
-```bash
-# 1. 检测项目类型
-Read("package.json") → React 项目
+- 统计成功/失败的模块数
+- 如果有失败 > 10%，可选择重试一次
+- 输出：`✓ Phase 3 完成：{successCount}/{totalModules} 个模块已分析`
 
-# 2. 获取源文件
-Glob("**/src/**/*.{ts,tsx}") → [文件列表]
-Glob("**/src/**/*.{js,jsx}") → [文件列表]
+---
 
-# 3. 识别路由
-Grep("/pages/", "src/**/*") → 页面文件
-Read("src/router.tsx") → 路由配置
+## Phase 4: 文档生成（并行）
 
-# 4. 生成清单
-Write(".wiki-generator/manifest.json", 清单内容)
+### 4.1 并行派生文档生成器
+
+类似 Phase 3，为每个已分析的模块派生文档生成器：
+
+```javascript
+const analyzedModules = modules.filter(m => {
+  // 检查分析文件是否存在
+  return fs.existsSync(`.worker/wiki/meta/analysis/${m.name}.json`);
+});
+
+for (let i = 0; i < analyzedModules.length; i += batchSize) {
+  const batch = analyzedModules.slice(i, i + batchSize);
+
+  await Promise.all(
+    batch.map(module => Agent({
+      description: `生成文档: ${module.name}`,
+      prompt: `你是一个文档生成器 Agent。\n\n模块信息:\n- 名称: ${module.name}\n- 分析结果: .worker/wiki/meta/analysis/${module.name}.json\n- 输出目录: .worker/.worker/wiki/zh/${module.name}/\n\n你的任务：\n1. 读取分析结果\n2. 应用文档模板\n3. 生成 README.md 和子文档\n4. 返回 JSON: {status, generatedFiles[], error?}\n\n注意：\n- 不要读取源代码，只读取分析结果\n- 使用相对路径建立链接`,
+      subagent_type: "general-purpose"
+    }))
+  );
+}
 ```
 
-### Step 3: 执行 Analysis
+### 4.2 生成索引
 
-```
-For each module in manifest.modules:
-  1. Read(module.entry)
-  2. Extract: 功能描述、导出、Props、API
-  3. Update manifest.modules[module].status = "analyzed"
-  4. Save manifest.json
-  5. Output: "分析完成: {module.name} ({index}/{total})"
-```
+派生索引生成器：
 
-### Step 4: 执行 Generation
-
-```
-# 1. 创建目录
-Bash: mkdir -p wiki/zh/{module.name}
-
-# 2. 生成模块文档
-For each module:
-  content = ApplyTemplate(module.analysis)
-  Write("wiki/zh/{module.name}/README.md", content)
-
-  For each file in module.files:
-    doc = GenerateDoc(file)
-    Write("wiki/zh/{module.name}/{file.name}.md", doc)
-
-# 3. 生成索引文档
-Write("wiki/zh/README.md", 项目概览)
-Write("wiki/zh/文档地图.md", 目录索引)
-
-# 4. 更新进度
-UpdateProgress("generation", completed, total)
+```javascript
+Agent({
+  description: "生成项目索引",
+  prompt: `你是一个索引生成器 Agent。\n\n你的任务：\n1. 读取 .worker/wiki/meta/modules.json\n2. 读取所有模块的分析结果\n3. 生成 .worker/wiki/zh/README.md（项目首页）\n4. 生成 .worker/wiki/zh/文档地图.md\n5. 返回 JSON: {status, generatedFiles[]}`,
+  subagent_type: "general-purpose"
+})
 ```
 
-### Step 5: 执行 Validation
+---
 
-```
-# 1. 对比清单
-originalFiles = manifest.fileInventory.total
-documentedFiles = CountGeneratedDocs()
-coverage = documentedFiles / originalFiles
+## Phase 5: 验证
 
-# 2. 检查遗漏
-missing = FindMissingFiles()
+派生验证器：
 
-# 3. 输出报告
-Write("wiki/zh/验证报告.md", 报告内容)
-Output: "文档覆盖率: {coverage}%"
+```javascript
+Agent({
+  description: "验证文档完整性",
+  prompt: `你是一个验证器 Agent。\n\n你的任务：\n1. 读取 files-index.json 和 modules.json\n2. 扫描 .worker/wiki/zh/ 目录\n3. 计算覆盖率 = 已文档化文件 / 总文件\n4. 检查模块完整性\n5. 生成 .worker/wiki/zh/验证报告.md\n6. 返回 JSON: {status, coverage, totalFiles, documentedFiles, warnings[]}`,
+  subagent_type: "general-purpose"
+})
 ```
 
-## 防偷懒机制
+---
 
-### 1. 清单强制执行
+## 进度输出示例
 
-```
-生成文档前：
-  - 必须读取 manifest.json
-  - 必须知道 totalModules
-
-生成文档时：
-  - 每完成一个，更新 status = "documented"
-  - 不能跳过任何一个
-
-生成文档后：
-  - 对比清单，验证 complete 数量 == totalModules
-  - 检查 pending 列表是否为空
-```
-
-### 2. 显式检查点
-
-每个 Phase 必须：
-- 保存 manifest.json
-- 输出该 Phase 摘要
-- 确认任务完成
-
-### 3. 可恢复执行
+执行过程中实时输出：
 
 ```
-中断后重新启动：
-  1. Read(".wiki-generator/manifest.json")
-  2. 找到第一个 status == "pending" 的任务
-  3. 从该任务继续
+[Phase 1/5] 文件收集
+  ⏳ 派生文件收集器 Subagent...
+  ✓ 收集完成：156 个文件
+
+[Phase 2/5] 模块识别
+  ⏳ 派生模块聚类器 Subagent...
+  ✓ 识别到 12 个模块
+
+[Phase 3/5] 模块分析
+  ⏳ 并行分析模块 (批次 1/3)
+    ⏳ 用户管理... ⏳ 订单管理... ⏳ 商品管理... ⏳ 系统设置... ⏳ 权限管理...
+  ✓ 批次 1 完成
+  ⏳ 并行分析模块 (批次 2/3)
+    ...
+  ✓ 分析完成：12/12 个模块
+
+[Phase 4/5] 文档生成
+  ⏳ 并行生成文档...
+  ✓ 生成完成：12 个模块文档
+  ⏳ 生成项目索引...
+  ✓ 索引生成完成
+
+[Phase 5/5] 验证
+  ⏳ 派生验证器...
+  ✓ 覆盖率：98.1%
+  ⚠ 未覆盖文件：3 个
+    - src/utils/date.ts
+    - src/utils/format.ts
+    - src/hooks/useDebounce.ts
+
+=== Wiki 生成完成 ===
+输出目录: .worker/wiki/zh/
+模块数: 12
+覆盖率: 98.1%
+验证报告: .worker/wiki/zh/验证报告.md
 ```
 
-## 项目类型检测
+---
 
-| 特征文件 | 检测内容 | 项目类型 |
-|---------|---------|---------|
-| package.json | dependencies.react | React 前端 |
-| package.json | dependencies.vue | Vue 前端 |
-| package.json | dependencies.next | Next.js |
-| package.json | dependencies.express/fastify | Node 后端 |
-| pom.xml | spring-boot | Spring Boot |
-| requirements.txt | django | Django |
-| requirements.txt | flask/fastapi | Python API |
-| go.mod | - | Go 项目 |
-| Cargo.toml | - | Rust 项目 |
+## 关键原则
 
-## 文档模板
+### 1. 不要自己读取源文件
 
-### 模块 README 模板
-
-```markdown
-# {模块名称}
-
-## 概述
-{功能描述}
-
-## 包含文件
-- {文件1} - {用途}
-- {文件2} - {用途}
-
-## API 列表
-| 接口 | 方法 | 路径 | 描述 |
-|-----|------|------|------|
-| {name} | {method} | {path} | {desc} |
-
-## 组件列表
-| 组件 | Props | 描述 |
-|-----|-------|------|
-| {name} | {props} | {desc} |
-
-## 依赖关系
-- 内部: {依赖模块}
-- 外部: {第三方库}
-
-## 使用示例
-\`\`\`typescript
-{代码示例}
-\`\`\`
+**错误**：
+```javascript
+// 不要这样做
+const content = fs.readFileSync('src/components/Button.tsx');
 ```
 
-## 输出示例
-
-### 前端项目输出
-
-```
-wiki/
-├── config.yaml
-├── meta/
-│   ├── manifest.json
-│   └── progress.json
-└── zh/
-    ├── README.md
-    ├── 文档地图.md
-    ├── 全局组件/
-    │   ├── README.md
-    │   ├── 按钮.md
-    │   ├── 模态框.md
-    │   └── 表格.md
-    ├── 用户管理/
-    │   ├── README.md
-    │   ├── 用户列表.md
-    │   ├── 用户详情.md
-    │   ├── 用户表单.md
-    │   ├── API接口.md
-    │   └── 状态管理.md
-    └── 订单管理/
-        ├── README.md
-        ├── 订单列表.md
-        └── ...
+**正确**：
+```javascript
+// 让 Subagent 去做
+Agent({
+  prompt: "读取 src/components/Button.tsx 并分析..."
+})
 ```
 
-### 后端项目输出
+### 2. 等待 Subagent 返回再继续
 
-```
-wiki/
-├── meta/
-└── zh/
-    ├── README.md
-    ├── 用户模块/
-    │   ├── README.md
-    │   ├── 控制器.md
-    │   ├── 服务层.md
-    │   ├── 数据模型.md
-    │   └── 路由定义.md
-    └── 订单模块/
-        └── ...
-```
+每个 Phase 必须等待所有 Subagent 完成后才能进入下一阶段。
 
-## 参考文档
+### 3. 通过文件传递数据
 
-- `references/file-discovery.md` - 文件发现策略
-- `references/execution-flow.md` - 执行流程详解
-- `references/directory-strategy.md` - 目录生成策略
-- `assets/manifest-example.json` - 清单文件示例
+Subagent 之间通过文件交换数据：
+- Phase 1 → Phase 2: `files-index.json`
+- Phase 2 → Phase 3: `modules.json`
+- Phase 3 → Phase 4: `analysis/*.json`
+
+### 4. 失败处理
+
+| 失败场景 | 处理 |
+|---------|------|
+| 文件收集失败 | 中止，提示用户检查配置 |
+| 单个模块分析失败 | 标记为 failed，继续其他模块 |
+| 覆盖率 < 95% | 生成警告报告，询问是否继续 |
+
+---
+
+## Agent 定义文件
+
+每个 Subagent 的详细定义在：
+
+- `skills/wiki-generator/agents/file-collector.md`
+- `skills/wiki-generator/agents/module-clusterer.md`
+- `skills/wiki-generator/agents/module-analyzer.md`
+- `skills/wiki-generator/agents/doc-generator.md`
+- `skills/wiki-generator/agents/index-generator.md`
+- `skills/wiki-generator/agents/validator.md`
+
+---
+
+## 脚本文件
+
+- `scripts/collect-files.js` - 文件收集脚本

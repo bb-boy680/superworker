@@ -282,3 +282,67 @@ customModules:
       - 用户资料
       - 用户权限
 ```
+
+## 基于分层检索的目录生成
+
+当使用分层深度检索时，模块结构已经通过 AI 语义聚类确定：
+
+### 目录映射规则
+
+Level 3 模块 -> Wiki 目录
+
+业务模块 (type=business):
+  wiki/zh/{模块名称}/
+    ├── README.md          # 模块概述
+    ├── 页面.md            # 页面组件文档
+    ├── API接口.md         # API 文档
+    └── 组件.md            # 共享组件文档
+
+共享模块 (type=shared):
+  wiki/zh/shared/{模块名称}/
+    ├── README.md
+    └── ...
+
+配置模块 (type=config):
+  wiki/zh/配置/
+    └── {模块名称}.md
+
+入口模块 (type=entry):
+  wiki/zh/项目入口/
+    ├── 主入口.md
+    └── 根组件.md
+
+### 嵌套深度控制
+
+- 最大深度：3 层（wiki/zh/大模块/子模块）
+- 超过 3 层的模块：扁平化为同级目录
+- 共享模块统一放在 wiki/zh/shared/
+
+### 文件分类映射
+
+根据 Level 3 的 files.byCategory 分类：
+
+pages/     → {模块名称}/页面/{文件名}.md
+components/ → {模块名称}/组件/{文件名}.md
+api/       → {模块名称}/API接口.md（合并）
+types/     → {模块名称}/类型定义.md（合并）
+utils/     → shared/工具函数/{模块名称}.md
+hooks/     → shared/Hooks/{文件名}.md
+
+### 与分层检索的集成流程
+
+Level 3 输出:
+  modules[].files.byCategory
+  modules[].type (business/shared/config/entry)
+
+↓ 映射
+
+Wiki 目录结构:
+  wiki/zh/
+    ├── {business模块}/
+    ├── shared/
+    │   ├── {shared模块}/
+    │   ├── 工具函数/
+    │   └── Hooks/
+    ├── 配置/
+    └── 项目入口/
