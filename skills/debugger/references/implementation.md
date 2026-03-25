@@ -6,14 +6,13 @@
 
 ---
 
-## Session ID 生成
+## Session ID 和 Port
 
-**Skill 代码中生成 sessionId**（每个会话独立）：
+**Skill 代码中读取环境变量**：
 
 ```javascript
-const sessionId = process.env.WT_SESSION ||
-                  process.env.CLAUDE_CODE_SESSION_ID ||
-                  `debug-${Date.now()}`;
+const sessionId = process.env.DEBUG_SESSION_ID;
+const port = process.env.DEBUG_PORT;
 ```
 
 日志文件路径：`.worker/debug/logs/{sessionId}.log`
@@ -22,7 +21,7 @@ const sessionId = process.env.WT_SESSION ||
 
 ## 项目类型判断
 
-读取 `.worker/debug/config.yaml`：
+读取 `${pwd}/.worker/debug/config.yaml`：
 
 ```yaml
 port: 9229

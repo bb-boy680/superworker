@@ -14,278 +14,415 @@ metadata:
       - git 仓库或项目目录
 ---
 
-# Wiki 生成器（全 Subagent 版本）
+# Wiki Generator Skill
 
-从任何项目代码库生成全面、企业级的 wiki 文档，采用主控-子代理架构。
+代码库自动生成 Wiki 文档的 Skill。基于代码复杂度分析，采用智能文档拆分策略生成层次化文档。
 
-**核心原则**：
-- 主控（你）**只调度，不执行具体任务**
-- 每个具体任务派生独立 Subagent 执行
-- 主控读取 Subagent 返回的状态，决定下一步
+## Description
 
----
+Wiki Generator 是一个智能文档生成系统，通过分析代码模块的复杂度，自动选择最适合的文档生成策略：
 
-## 快速开始
+- **单文档模式**: 适用于简单模块（复杂度 < 30）
+- **章节拆分模式**: 适用于中等模块（复杂度 30-60）
+- **嵌套文档模式**: 适用于复杂模块（复杂度 > 60）
 
-当用户要求生成 wiki 时，按以下步骤执行：
+## Execution Flow
 
-## Phase 1: 文件收集
+完整的执行流程分为 5 个 Phase：
 
-**你必须使用 Agent 工具派生 Subagent，而不是自己执行。**
+```
+Phase 1: 文件收集 (Subagent)
+    ↓
+Phase 2: 模块识别 (Subagent) → modules.json
+    ↓
+Phase 3: 复杂度评估 (并行 Subagents) → complexity/*.json
+    ↓
+Phase 4: 文档生成（根据复杂度决定策略）
+    │   ├── 简单模块 → 单文档生成
+    │   ├── 中等模块 → 章节文档生成
+    │   └── 复杂模块 → 嵌套文档生成
+    ↓
+Phase 5: 验证 (Subagent)
+```
 
-### 1.1 派生文件收集器
+### Phase 1: 文件收集
 
-使用 Agent 工具，读取 `agents/file-collector.md`，然后执行：
+**Agent**: `file-collector`
 
-```javascript
-// 使用 Agent 工具调用
+**职责**:
+- 扫描目标代码库的所有源文件
+- 过滤掉测试文件、node_modules、构建产物等
+- 生成文件索引，按文件类型和目录组织
+
+**输出**: `.worker/wiki/file-index.json`
+
+```json
 {
-  "description": "收集项目文件路径",
-  "prompt": "你是一个文件收集器 Agent。\n\n你的任务：\n1. 检查 .worker/wiki/config.yaml 是否存在\n2. 运行 node scripts/collect-files.js\n3. 验证生成的 .worker/wiki/temp/files-index.json\n4. 返回 JSON 格式的结果：{status, totalFiles, error?}",
-  "subagent_type": "general-purpose"
+  "files": [
+    {
+      "path": "src/agent/core/llm/index.ts",
+      "type": "typescript",
+      "size": 1250,
+      "exports": ["callLLM", "streamLLM"]
+    }
+  ],
+  "totalCount": 150
 }
 ```
 
-### 1.2 处理结果
+### Phase 2: 模块识别
 
-**等待 Subagent 返回后**：
+**Agent**: `module-clusterer`
 
-- **如果返回 success**：
-  - 记录 `totalFiles`
-  - 输出：`✓ Phase 1 完成：收集到 {totalFiles} 个文件`
-  - 进入 Phase 2
+**职责**:
+- 分析文件索引，识别代码模块
+- 根据目录结构、入口文件、依赖关系聚类
+- 确定模块层级关系和边界
 
-- **如果返回 failed**：
-  - 输出错误信息
-  - 中止执行，提示用户修复问题
+**输入**: `file-index.json`
+**输出**: `.worker/wiki/meta/modules.json`
 
----
-
-## Phase 2: 模块识别
-
-### 2.1 派生模块聚类器
-
-使用 Agent 工具，读取 `agents/module-clusterer.md`：
-
-```javascript
+```json
 {
-  "description": "识别模块边界",
-  "prompt": "你是一个模块聚类器 Agent。\n\n你的任务：\n1. 读取 .worker/wiki/temp/files-index.json\n2. AI 语义分析，识别业务模块、共享模块、配置模块\n3. 为每个模块确定入口文件\n4. 输出到 .worker/wiki/meta/modules.json\n5. 返回 JSON: {status, totalModules, modules[], orphanFiles[]}\n\n注意：\n- 基于文件路径进行语义分析\n- 不要读取文件内容，只分析路径\n- 模块名用中文",
-  "subagent_type": "general-purpose"
+  "modules": [
+    {
+      "id": "agent-core-llm",
+      "name": "LLM调用",
+      "path": "src/agent/core/llm",
+      "entryFile": "src/agent/core/llm/index.ts",
+      "files": [...],
+      "hasSubdirs": true
+    }
+  ]
 }
 ```
 
-### 2.2 处理结果
+### Phase 3: 复杂度评估
 
-**等待返回后**：
+**Agent**: `complexity-evaluator` (并行执行)
 
-- **如果返回 success**：
-  - 读取 `.worker/wiki/meta/modules.json`
-  - 记录 `totalModules`
-  - 输出：`✓ Phase 2.1 完成：识别到 {totalModules} 个模块`
-  - 进入 Phase 2.2
+**职责**:
+- 读取模块入口文件和关键子文件
+- 基于多维度指标计算复杂度分数 (0-100)
+- 决定文档策略：single / sections / nested
 
----
+**输入**: 单个模块信息
+**输出**: `.worker/wiki/meta/complexity/{moduleId}.json`
 
-## Phase 3: 模块分析（并行）
+**复杂度评分指标**:
 
-**关键：为每个模块并行派生分析器**
+| 指标 | 评分规则 | 最高分 |
+|------|----------|--------|
+| 代码行数 | >1000→30, >500→20, >200→10, else→5 | 30 |
+| 导出数量 | exports × 2, 上限15 | 15 |
+| 依赖数量 | imports.length, 上限15 | 15 |
+| 子模块 | hasSubdirs → 20 | 20 |
+| 复杂逻辑 | hasComplexLogic → 10 | 10 |
+| 使用场景 | useCases × 3, 上限10 | 10 |
 
-### 3.1 读取模块列表
+**复杂度等级**:
+- **简单 (0-30)**: 工具函数、简单组件、配置
+- **中等 (30-60)**: 服务类、中等组件、简单模块
+- **复杂 (60-100)**: 核心模块、复杂组件、框架级代码
 
-使用 Read 工具读取 `.worker/wiki/meta/modules.json`：
+### Phase 4: 文档生成
 
-```javascript
-const modulesData = JSON.parse(
-  fs.readFileSync('.worker/wiki/meta/modules.json')
-);
-const modules = modulesData.modules;
+**Agent**: `doc-generator` (并行执行)
+
+根据复杂度报告中的 `strategy.type` 选择对应策略：
+
+#### Strategy 1: Single（单文档模式）
+
+**适用**: 简单模块（复杂度 < 30）
+
+**输出**: `wiki/zh/{moduleName}.md`
+
+**文档结构**:
+```markdown
+# {模块名}
+
+## 概述
+## API
+## 使用示例
 ```
 
-### 3.2 并行派生分析器
+#### Strategy 2: Sections（章节拆分模式）
 
-**一次最多并行 5 个**（避免过度消耗资源）：
+**适用**: 中等模块（复杂度 30-60）
+
+**输出**: `wiki/zh/{moduleName}/README.md`
+
+**文档结构**:
+```markdown
+# {模块名}
+
+## 概述
+## 架构设计
+## 核心功能
+## API 参考
+## 配置选项
+## 使用示例
+## 最佳实践
+## 总结
+```
+
+#### Strategy 3: Nested（嵌套文档模式）
+
+**适用**: 复杂模块（复杂度 > 60）
+
+**输出**:
+- 主文档: `wiki/zh/{moduleName}/README.md`
+- 子文档: `wiki/zh/{moduleName}/{subModuleName}.md`
+
+**执行流程**:
+1. 生成主文档作为容器/索引
+2. 遍历子模块列表
+3. 为每个子模块递归调用文档生成（深度+1）
+4. 在主文档中添加子模块导航
+
+### Phase 5: 验证
+
+**Agent**: `validator`
+
+**职责**:
+- 检查生成的文档完整性
+- 验证链接有效性
+- 确认所有模块都有对应文档
+- 检查格式规范
+
+**输出**: 验证报告
+
+## Agents
+
+### file-collector
+
+文件收集 Agent，负责扫描代码库并生成文件索引。
+
+**输入**: 项目根目录路径
+**输出**: 文件索引 JSON
+
+### module-clusterer
+
+模块识别 Agent，负责分析文件并聚类成模块。
+
+**输入**: 文件索引 JSON
+**输出**: 模块定义 JSON
+
+### complexity-evaluator
+
+复杂度评估 Agent，负责分析模块复杂度并决定文档策略。
+
+**输入**: 单个模块信息
+**输出**: 复杂度报告 JSON
+
+**详见**: [agents/complexity-evaluator.md](./agents/complexity-evaluator.md)
+
+### doc-generator
+
+文档生成 Agent，负责根据复杂度报告生成对应类型的文档。
+
+**输入**: 模块信息 + 复杂度报告
+**输出**: Markdown 文档
+
+**详见**: [agents/doc-generator.md](./agents/doc-generator.md)
+
+### validator
+
+验证 Agent，负责检查生成文档的质量和完整性。
+
+**输入**: 生成的文档目录
+**输出**: 验证报告
+
+## Configuration
+
+### 配置文件位置
+
+`.claude/skills/wiki-generator/config.json`
+
+### 配置项
+
+```json
+{
+  "input": {
+    "rootPath": "./",
+    "include": ["src/**/*", "lib/**/*"],
+    "exclude": ["**/*.test.ts", "**/*.spec.ts", "node_modules/**", "dist/**"]
+  },
+  "output": {
+    "basePath": "wiki/zh",
+    "metaPath": ".worker/wiki/meta"
+  },
+  "complexity": {
+    "thresholds": {
+      "simple": 30,
+      "medium": 60,
+      "complex": 100
+    },
+    "weights": {
+      "lines": 30,
+      "exports": 15,
+      "dependencies": 15,
+      "submodules": 20,
+      "complexLogic": 10,
+      "useCases": 10
+    }
+  },
+  "strategies": {
+    "single": {
+      "sections": ["概述", "API", "示例"]
+    },
+    "sections": {
+      "sections": ["概述", "架构设计", "核心功能", "API参考", "配置选项", "使用示例", "最佳实践", "总结"]
+    },
+    "nested": {
+      "maxDepth": 3,
+      "sections": ["概述", "架构设计", "子模块", "快速开始", "文档结构", "总结"]
+    }
+  }
+}
+```
+
+## Usage Examples
+
+### 基本用法
 
 ```javascript
-// 分批并行处理
-const batchSize = 5;
-for (let i = 0; i < modules.length; i += batchSize) {
-  const batch = modules.slice(i, i + batchSize);
+// 主控函数 - 执行完整的 Wiki 生成流程
+async function executeWikiGeneration() {
+  // Phase 1: 文件收集
+  const fileIndex = await runFileCollector();
 
-  // 使用多个 Agent 工具并行执行
-  const results = await Promise.all(
-    batch.map(module => Agent({
-      description: `分析模块: ${module.name}`,
-      prompt: `你是一个模块分析器 Agent。\n\n模块信息:\n- 名称: ${module.name}\n- 类型: ${module.type}\n- 入口文件: ${module.entry}\n- 文件列表: ${module.files.join(', ')}\n\n你的任务：\n1. 读取入口文件和相关文件（最多5个）\n2. 提取导出内容、组件、API、类型\n3. 分析依赖关系\n4. 生成功能描述\n5. 输出到 .worker/wiki/meta/analysis/${module.name}.json\n6. 返回 JSON: {status, exportsCount, componentsCount, error?}`,
-      subagent_type: "general-purpose"
-    }))
+  // Phase 2: 模块识别
+  const modules = await runModuleClusterer();
+
+  // Phase 3: 复杂度评估（并行）
+  const complexityReports = await Promise.all(
+    modules.map(m => runComplexityEvaluator(m))
   );
 
-  // 记录结果
-  results.forEach((result, idx) => {
-    const module = batch[idx];
-    console.log(`模块 ${module.name}: ${result.status}`);
-  });
+  // 按复杂度分组
+  const simpleModules = complexityReports.filter(r => r.strategy.type === 'single');
+  const mediumModules = complexityReports.filter(r => r.strategy.type === 'sections');
+  const complexModules = complexityReports.filter(r => r.strategy.type === 'nested');
+
+  // Phase 4: 分别生成（并行）
+  await Promise.all([
+    Promise.all(simpleModules.map(m => generateSingleDoc(m))),
+    Promise.all(mediumModules.map(m => generateSectionedDoc(m))),
+    (async () => {
+      for (const m of complexModules) {
+        await generateNestedDocs(m);
+      }
+    })()
+  ]);
+
+  // Phase 5: 验证
+  await runValidator();
 }
 ```
 
-### 3.3 处理结果
-
-- 统计成功/失败的模块数
-- 如果有失败 > 10%，可选择重试一次
-- 输出：`✓ Phase 3 完成：{successCount}/{totalModules} 个模块已分析`
-
----
-
-## Phase 4: 文档生成（并行）
-
-### 4.1 并行派生文档生成器
-
-类似 Phase 3，为每个已分析的模块派生文档生成器：
+### 单独使用某 Phase
 
 ```javascript
-const analyzedModules = modules.filter(m => {
-  // 检查分析文件是否存在
-  return fs.existsSync(`.worker/wiki/meta/analysis/${m.name}.json`);
-});
+// 仅执行复杂度评估
+async function analyzeComplexity(modulePath) {
+  const result = await complexityEvaluator.analyze(modulePath);
+  return result;
+}
 
-for (let i = 0; i < analyzedModules.length; i += batchSize) {
-  const batch = analyzedModules.slice(i, i + batchSize);
-
-  await Promise.all(
-    batch.map(module => Agent({
-      description: `生成文档: ${module.name}`,
-      prompt: `你是一个文档生成器 Agent。\n\n模块信息:\n- 名称: ${module.name}\n- 分析结果: .worker/wiki/meta/analysis/${module.name}.json\n- 输出目录: .worker/.worker/wiki/zh/${module.name}/\n\n你的任务：\n1. 读取分析结果\n2. 应用文档模板\n3. 生成 README.md 和子文档\n4. 返回 JSON: {status, generatedFiles[], error?}\n\n注意：\n- 不要读取源代码，只读取分析结果\n- 使用相对路径建立链接`,
-      subagent_type: "general-purpose"
-    }))
-  );
+// 仅生成文档（已有复杂度报告）
+async function generateDocsFromReport(module, complexityReport) {
+  const { generateDocs } = require('./scripts/doc-strategies');
+  return await generateDocs(module, complexityReport);
 }
 ```
 
-### 4.2 生成索引
+### 使用 CLI
 
-派生索引生成器：
+```bash
+# 执行完整流程
+claude skill wiki-generator:generate
 
-```javascript
-Agent({
-  description: "生成项目索引",
-  prompt: `你是一个索引生成器 Agent。\n\n你的任务：\n1. 读取 .worker/wiki/meta/modules.json\n2. 读取所有模块的分析结果\n3. 生成 .worker/wiki/zh/README.md（项目首页）\n4. 生成 .worker/wiki/zh/文档地图.md\n5. 返回 JSON: {status, generatedFiles[]}`,
-  subagent_type: "general-purpose"
-})
+# 仅执行特定 Phase
+claude skill wiki-generator:collect-files
+claude skill wiki-generator:cluster-modules
+claude skill wiki-generator:evaluate-complexity
+claude skill wiki-generator:generate-docs
+claude skill wiki-generator:validate
 ```
 
----
+## Scripts
 
-## Phase 5: 验证
+### doc-strategies.js
 
-派生验证器：
+文档生成策略的核心实现，支持三种策略模式。
 
-```javascript
-Agent({
-  description: "验证文档完整性",
-  prompt: `你是一个验证器 Agent。\n\n你的任务：\n1. 读取 files-index.json 和 modules.json\n2. 扫描 .worker/wiki/zh/ 目录\n3. 计算覆盖率 = 已文档化文件 / 总文件\n4. 检查模块完整性\n5. 生成 .worker/wiki/zh/验证报告.md\n6. 返回 JSON: {status, coverage, totalFiles, documentedFiles, warnings[]}`,
-  subagent_type: "general-purpose"
-})
+**路径**: [scripts/doc-strategies.js](./scripts/doc-strategies.js)
+
+**主要函数**:
+- `generateDocs(module, complexityReport, currentDepth)` - 主入口，根据策略类型分发
+- `generateSingleDoc(module, complexityReport)` - 单文档模式
+- `generateSectionedDoc(module, complexityReport)` - 章节拆分模式
+- `generateNestedDocs(module, complexityReport, depth)` - 嵌套文档模式
+
+### complexity-analyzer.js
+
+复杂度分析算法实现。
+
+**路径**: [scripts/complexity-analyzer.js](./scripts/complexity-analyzer.js)
+
+**主要函数**:
+- `analyzeFile(filePath)` - 分析单个文件
+- `calculateComplexity(metrics)` - 计算复杂度分数
+- `determineStrategy(score)` - 根据分数决定策略
+
+## Directory Structure
+
+```
+skills/wiki-generator/
+├── SKILL.md                      # 本文件 - 主控文档
+├── agents/
+│   ├── complexity-evaluator.md   # 复杂度评估 Agent 定义
+│   └── doc-generator.md          # 文档生成 Agent 定义
+├── scripts/
+│   ├── doc-strategies.js         # 文档策略实现
+│   ├── doc-strategies.test.js    # 策略测试
+│   ├── complexity-analyzer.js    # 复杂度分析
+│   └── complexity-analyzer.test.js
+└── config/
+    └── schema.json               # 配置 Schema
 ```
 
----
-
-## 进度输出示例
-
-执行过程中实时输出：
+## Output Directory Structure
 
 ```
-[Phase 1/5] 文件收集
-  ⏳ 派生文件收集器 Subagent...
-  ✓ 收集完成：156 个文件
-
-[Phase 2/5] 模块识别
-  ⏳ 派生模块聚类器 Subagent...
-  ✓ 识别到 12 个模块
-
-[Phase 3/5] 模块分析
-  ⏳ 并行分析模块 (批次 1/3)
-    ⏳ 用户管理... ⏳ 订单管理... ⏳ 商品管理... ⏳ 系统设置... ⏳ 权限管理...
-  ✓ 批次 1 完成
-  ⏳ 并行分析模块 (批次 2/3)
-    ...
-  ✓ 分析完成：12/12 个模块
-
-[Phase 4/5] 文档生成
-  ⏳ 并行生成文档...
-  ✓ 生成完成：12 个模块文档
-  ⏳ 生成项目索引...
-  ✓ 索引生成完成
-
-[Phase 5/5] 验证
-  ⏳ 派生验证器...
-  ✓ 覆盖率：98.1%
-  ⚠ 未覆盖文件：3 个
-    - src/utils/date.ts
-    - src/utils/format.ts
-    - src/hooks/useDebounce.ts
-
-=== Wiki 生成完成 ===
-输出目录: .worker/wiki/zh/
-模块数: 12
-覆盖率: 98.1%
-验证报告: .worker/wiki/zh/验证报告.md
+wiki/
+├── zh/                           # 中文文档
+│   ├── simple-module.md          # 简单模块 - 单文档
+│   ├── medium-module/            # 中等模块 - 章节拆分
+│   │   └── README.md
+│   └── complex-module/           # 复杂模块 - 嵌套拆分
+│       ├── README.md             # 主文档（容器）
+│       ├── sub-module-a.md       # 子模块文档
+│       └── sub-module-b.md
+└── meta/                         # 元数据
+    ├── modules.json              # 模块定义
+    ├── complexity/               # 复杂度报告
+    │   ├── module-a.json
+    │   └── module-b.json
+    └── validation-report.json    # 验证报告
 ```
 
----
+## Dependencies
 
-## 关键原则
+- Node.js >= 16.0.0
+- 支持文件系统操作 (fs/promises)
+- 支持路径处理 (path)
 
-### 1. 不要自己读取源文件
+## Notes
 
-**错误**：
-```javascript
-// 不要这样做
-const content = fs.readFileSync('src/components/Button.tsx');
-```
-
-**正确**：
-```javascript
-// 让 Subagent 去做
-Agent({
-  prompt: "读取 src/components/Button.tsx 并分析..."
-})
-```
-
-### 2. 等待 Subagent 返回再继续
-
-每个 Phase 必须等待所有 Subagent 完成后才能进入下一阶段。
-
-### 3. 通过文件传递数据
-
-Subagent 之间通过文件交换数据：
-- Phase 1 → Phase 2: `files-index.json`
-- Phase 2 → Phase 3: `modules.json`
-- Phase 3 → Phase 4: `analysis/*.json`
-
-### 4. 失败处理
-
-| 失败场景 | 处理 |
-|---------|------|
-| 文件收集失败 | 中止，提示用户检查配置 |
-| 单个模块分析失败 | 标记为 failed，继续其他模块 |
-| 覆盖率 < 95% | 生成警告报告，询问是否继续 |
-
----
-
-## Agent 定义文件
-
-每个 Subagent 的详细定义在：
-
-- `skills/wiki-generator/agents/file-collector.md`
-- `skills/wiki-generator/agents/module-clusterer.md`
-- `skills/wiki-generator/agents/module-analyzer.md`
-- `skills/wiki-generator/agents/doc-generator.md`
-- `skills/wiki-generator/agents/index-generator.md`
-- `skills/wiki-generator/agents/validator.md`
-
----
-
-## 脚本文件
-
-- `scripts/collect-files.js` - 文件收集脚本
+1. **Token 优化**: 复杂度评估阶段只读取最多 2 个关键子文件，避免 Token 过度消耗
+2. **并行执行**: Phase 3 和 Phase 4 中的简单/中等模块可以并行处理
+3. **顺序执行**: 复杂模块的嵌套文档生成需要顺序执行（递归深度控制）
+4. **缓存机制**: 复杂度报告会缓存，避免重复分析
+5. **错误恢复**: 单个模块生成失败不会影响其他模块
