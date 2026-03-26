@@ -11,6 +11,7 @@ onMounted(() => {
     ? slug.join('/')
     : null
   if (path) {
+    // API 现在直接读取 wiki/zh 目录下的文件
     loadFile(path)
   } else {
     clearContent()
@@ -26,7 +27,7 @@ onMounted(() => {
     </aside>
 
     <!-- 右侧：Markdown 渲染区，独立滚动 -->
-    <div class="flex-1 overflow-y-auto h-full">
+    <div class="flex-1 overflow-y-auto h-full px-6">
       <WikiMarkdownViewer
         :content="fileState.fileContent"
       />

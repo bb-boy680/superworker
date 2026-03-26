@@ -20,12 +20,12 @@ export default defineEventHandler((event) => {
     })
   }
 
-  const fullPath = path.join(project.path, '.worker', filePath)
+  const fullPath = path.join(project.path, '.worker', 'wiki', 'zh', filePath)
 
-  // 安全检查：确保路径在 .worker 目录内
-  const workerDir = path.join(project.path, '.worker')
+  // 安全检查：确保路径在 wiki/zh 目录内
+  const wikiDir = path.join(project.path, '.worker', 'wiki', 'zh')
   const resolvedPath = path.resolve(fullPath)
-  if (!resolvedPath.startsWith(workerDir)) {
+  if (!resolvedPath.startsWith(wikiDir)) {
     throw createError({
       statusCode: 403,
       message: 'Access denied',

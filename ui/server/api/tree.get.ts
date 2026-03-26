@@ -37,11 +37,12 @@ export default defineEventHandler(() => {
     return { tree: [] }
   }
 
-  const workerDir = path.join(project.path, '.worker')
-  if (!fs.existsSync(workerDir)) {
+  // 只获取 wiki/zh 目录
+  const wikiDir = path.join(project.path, '.worker', 'wiki', 'zh')
+  if (!fs.existsSync(wikiDir)) {
     return { tree: [] }
   }
 
-  const tree = buildTree(workerDir, workerDir)
+  const tree = buildTree(wikiDir, wikiDir)
   return { tree }
 })

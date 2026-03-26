@@ -9,7 +9,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <div class="markdown-container p-6 max-w-4xl mx-auto">
+  <div class="markdown-container py-6 w-full">
     <MarkdownRender
       custom-id="wiki-viewer"
       :content="content"
