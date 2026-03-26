@@ -46,15 +46,15 @@ description: |
 
 ## 前置步骤（必须）
 
-**开始调试前必须设置环境变量和工作目录**：
+**开始对话前必须设置环境变量和工作目录**：
 
 ```bash
 # 确保在项目根目录
 pwd
 
 # 设置环境变量
-export DEBUG_SESSION_ID=$(grep DEBUG_SESSION_ID .worker/.env | cut -d'=' -f2)
-export DEBUG_PORT=$(grep port .worker/debug/config.yaml | cut -d' ' -f2)
+export DEBUG_SESSION_ID=$(grep DEBUG_SESSION_ID ${pwd}/.worker/.env | cut -d'=' -f2)
+export DEBUG_PORT=$(grep port ${pwd}/.worker/debug/config.yaml | cut -d' ' -f2)
 ```
 
 > ⚠️ **重要提醒**：操作前必须确认当前工作目录是项目根目录。使用相对路径时，AI 可能会读取到错误的工作目录。
@@ -80,11 +80,16 @@ const sessionId = process.env.DEBUG_SESSION_ID;
 
 **⚠️ 强制规则**：每个埋点必须是**完全独立的折叠块**，包含完整自包含的代码。
 
-- ❌ 禁止创建辅助函数多处调用
-- ❌ 禁止引用外部模块
-- ❌ 禁止在文件顶部放置共享函数
+| 禁止行为 | 示例 |
+|---------|------|
+| ❌ 创建辅助函数多处调用 | `const sendDebugLog = (label, data) => { ... }` |
+| ❌ 在文件顶部放置共享函数 | `function debugLog(...) { ... }` 放在文件开头 |
+| ❌ 引用外部模块 | `import { debugHelper } from './debug'` |
+| ❌ 多个埋点共享同一段代码 | 同一文件内多处调用同一个函数 |
 
-> 详细说明和代码示例参考：`references/implementation.md`
+**正确做法**：每个埋点位置都插入完整的、重复的 fetch/日志代码，即使代码看起来重复。
+
+> 详细说明、代码示例和错误示范参考：`references/implementation.md`
 
 ### 1.3 对话回合结束
 

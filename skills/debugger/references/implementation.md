@@ -6,6 +6,67 @@
 
 ---
 
+## ❌ 错误示范（绝对禁止）
+
+**以下代码模式严禁使用**：
+
+### 错误 1：创建辅助函数
+
+```javascript
+// ❌ 禁止：文件顶部创建辅助函数
+const DEBUG_SESSION_ID = '...';
+const DEBUG_PORT = 9330;
+
+// ❌ 禁止：创建 sendDebugLog 函数供多处调用
+function sendDebugLog(label: string, data: any) {
+  fetch(`http://localhost:${DEBUG_PORT}/debug/log?session_id=${DEBUG_SESSION_ID}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location: 'useFileTree.ts:0',
+      message: `[DEBUG] ${label}`,
+      data,
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+}
+
+// ❌ 禁止：多处调用同一个函数
+async function fetchTree() {
+  sendDebugLog('fetchTree entry', { expandedFolders: ... })  // 违规！
+  // ...
+}
+```
+
+### 错误 2：共享变量
+
+```javascript
+// ❌ 禁止：在文件顶部放置共享常量
+const DEBUG_SESSION_ID = 'xxx';
+const DEBUG_PORT = 9330;
+
+// ❌ 禁止：在函数内部引用外部变量
+async function fetchTree() {
+  // #region DEBUG
+  fetch(`http://localhost:${DEBUG_PORT}/debug/log?session_id=${DEBUG_SESSION_ID}`, ...)  // 违规！依赖外部变量
+  // #endregion DEBUG
+}
+```
+
+**为什么禁止？**
+1. 清理时难以完全移除（辅助函数可能被遗漏）
+2. 污染代码库（增加了不必要的函数定义）
+3. 可能产生副作用（函数执行时机不确定）
+4. 破坏代码的纯粹性（调试代码应该完全隔离）
+
+---
+
+## ✅ 正确做法
+
+**每个埋点都必须是完全独立的代码块**：
+
+---
+
 ## Session ID 和 Port
 
 **Skill 代码中读取环境变量**：
@@ -277,4 +338,49 @@ function yourFunction(arg) {
 }
 ```
 
-每个埋点位置都是一个独立的折叠块，包含完整的埋点代码，不依赖外部函数。
+**关键要点**：
+- 每个 `#region DEBUG` 都包含完整的 fetch 调用
+- 不依赖文件顶部的任何变量或函数
+- 即使同一个文件有 10 个埋点，也要写 10 次完整的代码
+- 清理时可以用 sed 一键删除 `#region DEBUG` 到 `#endregion DEBUG` 之间的所有内容
+
+---
+
+## 多埋点示例（同一文件）
+
+即使需要在同一函数的多个位置埋点，每个埋点也必须完全独立：
+
+```typescript
+// ✅ 正确：每个埋点独立
+async function fetchTree() {
+  // #region DEBUG [sessionId: abc-123, port: 9330]
+  fetch('http://localhost:9330/debug/log?session_id=abc-123', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location: 'useFileTree.ts:10',
+      message: '[函数入口:进入fetchTree]',
+      data: { state: 'starting' }
+    })
+  }).catch(() => {});
+  // #endregion DEBUG
+
+  const data = await api.getTree();
+
+  // #region DEBUG [sessionId: abc-123, port: 9330]
+  fetch('http://localhost:9330/debug/log?session_id=abc-123', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location: 'useFileTree.ts:15',
+      message: '[数据获取:API返回结果]',
+      data: { dataLength: data?.length }
+    })
+  }).catch(() => {});
+  // #endregion DEBUG
+
+  return processData(data);
+}
+```
+
+**注意**：虽然代码重复了 fetch 调用，但这是设计意图——便于清理和隔离。

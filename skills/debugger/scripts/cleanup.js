@@ -52,8 +52,12 @@ const COLORS = {
   nc: '\x1b[0m',  // No Color
 };
 
-// 埋点标记正则表达式
-const DEBUG_BLOCK_REGEX = /^[ \t]*(?:#|\/\/)[ \t]*#region[ \t]+DEBUG.*?\r?\n[\s\S]*?^[ \t]*(?:#|\/\/)[ \t]*#?[ \t]*endregion[ \t]*DEBUG/gmi;
+// 埋点标记正则表达式 - 包含周围的空白行
+// 匹配：前导空行(可选) + #region DEBUG ... #endregion DEBUG + 后续空行(最多2行)
+const DEBUG_BLOCK_REGEX = /([ \t]*\r?\n)?^[ \t]*(?:#|\/\/)[ \t]*#region[ \t]+DEBUG.*?\r?\n[\s\S]*?^[ \t]*(?:#|\/\/)[ \t]*#?[ \t]*endregion[ \t]*DEBUG.*?\r?\n?([ \t]*\r?\n)?/gmi;
+
+// 用于检测埋点块的简化正则（不包含周围空行）
+const DEBUG_BLOCK_CORE_REGEX = /^[ \t]*(?:#|\/\/)[ \t]*#region[ \t]+DEBUG.*?\r?\n[\s\S]*?^[ \t]*(?:#|\/\/)[ \t]*#?[ \t]*endregion[ \t]*DEBUG.*?$/gmi;
 
 /**
  * 检查文件扩展名是否支持
@@ -67,7 +71,7 @@ function isSupportedFile(filePath) {
  * 统计埋点数量
  */
 function countDebugBlocks(content) {
-  const matches = content.match(DEBUG_BLOCK_REGEX);
+  const matches = content.match(DEBUG_BLOCK_CORE_REGEX);
   return matches ? matches.length : 0;
 }
 
@@ -97,7 +101,7 @@ function cleanupFile(filePath, options) {
 
     // 显示埋点预览
     let match;
-    const regex = new RegExp(DEBUG_BLOCK_REGEX.source, 'gmi');
+    const regex = new RegExp(DEBUG_BLOCK_CORE_REGEX.source, 'gmi');
     let index = 1;
     while ((match = regex.exec(content)) !== null) {
       const lines = match[0].split(/\r?\n/);
@@ -127,10 +131,17 @@ function cleanupFile(filePath, options) {
     }
   }
 
-  // 执行清理
-  const cleanedContent = content
-    .replace(DEBUG_BLOCK_REGEX, '')
-    .replace(/\n{4,}/g, '\n\n\n');  // 清理多余空行
+  // 执行清理 - 智能处理周围空行
+  let cleanedContent = content.replace(DEBUG_BLOCK_REGEX, '\n');
+
+  // 清理可能产生的多余空行（最多保留2个连续换行）
+  cleanedContent = cleanedContent.replace(/\n{3,}/g, '\n\n');
+
+  // 清理文件末尾的多余空行
+  cleanedContent = cleanedContent.replace(/\n+$/g, '\n');
+
+  // 清理文件开头的多余空行
+  cleanedContent = cleanedContent.replace(/^\n+/g, '');
 
   try {
     fs.writeFileSync(filePath, cleanedContent, 'utf-8');
