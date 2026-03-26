@@ -58,33 +58,6 @@ export DEBUG_PORT=$(grep port ${pwd}/.worker/debug/config.yaml | cut -d' ' -f2)
 
 ## 路径处理最佳实践
 
-### 获取项目根目录
-
-**Node.js**：
-```javascript
-const path = require('path');
-
-// 方法1：使用 process.cwd()
-const projectRoot = process.cwd();
-
-// 方法2：从当前文件向上查找
-const projectRoot = path.resolve(__dirname, '../../../');
-
-// 构建绝对路径
-const logPath = path.join(projectRoot, '.worker/debug/logs', `${sessionId}.log`);
-```
-
-**Python**：
-```python
-import os
-
-# 获取当前工作目录
-project_root = os.getcwd()
-
-# 或使用绝对路径
-log_path = os.path.join(project_root, '.worker/debug/logs', f'{session_id}.log')
-```
-
 ### 读取文件前先检查目录
 
 ```bash

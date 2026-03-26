@@ -21,8 +21,12 @@
         "description": "清空当前会话的 *.log 文件内容"
       },
       {
-        "label": "继续修复",
+        "label": "添加更多埋点",
         "description": "埋点的范围不够全面，需要再次添加更多的埋点"
+      },
+      {
+        "label": "分析日志 & 修复",
+        "description": "用户已经复现了，需要分析日志文件并分析和修复"
       },
       {
         "label": "完成修复",
@@ -52,20 +56,27 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/debugger/scripts/clear-log.js
 node ${CLAUDE_PLUGIN_ROOT}/skills/debugger/scripts/clear-log.js --session $DEBUG_SESSION_ID
 ```
 
-### 继续修复
+### 添加更多埋点
 - **作用**：埋点的范围不够全面，需要再次添加更多的埋点
 - **使用场景**：
   - 问题未复现，埋点位置不对
   - 日志数据不足，无法定位根因
 - **执行**：继续当前调试流程，添加更多埋点
 
+### 分析日志 & 修复
+- **作用**：用户已经复现了，需要分析日志文件并分析和修复
+- **使用场景**：
+  - 用户已完成复现，日志已记录
+  - 需要分析日志并定位问题
+  - 需要修复代码
+- **执行**：分析日志文件，找出问题并修复代码
+
 ### 完成修复
 - **作用**：用户验证后，认为 BUG 已经修复完毕了，需要清空埋点代码
 - **使用场景**：
-  - 准备进入分析阶段
   - 修复已验证成功
   - 调试流程结束
-- **执行**：进入下一阶段或结束调试
+- **执行**：清空埋点代码，完成调试
 
 ---
 
@@ -92,29 +103,29 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/debugger/scripts/clear-log.js --session $DEBUG
 用户: 我的代码有 bug
 AI:  好的，我来帮你调试。首先设置环境变量...
      [执行前置步骤]
-     → AskUserQuestion(清空日志/继续修复/完成修复)
+     → AskUserQuestion(清空日志/添加更多埋点/分析日志 & 修复/完成修复)
 
-用户: 选择"继续修复"（添加埋点）
+用户: 选择"添加更多埋点"
 AI:  好的，我在关键位置添加了埋点...
      [添加埋点]
-     → AskUserQuestion(清空日志/继续修复/完成修复)
+     → AskUserQuestion(清空日志/添加更多埋点/分析日志 & 修复/完成修复)
 
-用户: 选择"完成修复"（确认埋点完成）
-AI:  请手动复现 BUG...
+用户: 选择"添加更多埋点"
+AI:  又添加了一些埋点，现在请手动复现 BUG...
      [等待用户复现]
-     [分析日志]
-     → AskUserQuestion(清空日志/继续修复/完成修复)
+     → AskUserQuestion(清空日志/添加更多埋点/分析日志 & 修复/完成修复)
 
-用户: 选择"完成修复"（确认分析完成）
+用户: 选择"分析日志 & 修复"
 AI:  根据日志分析，问题是...
+     [分析日志]
      [修复代码]
-     → AskUserQuestion(清空日志/继续修复/完成修复)
+     → AskUserQuestion(清空日志/添加更多埋点/分析日志 & 修复/完成修复)
 
-用户: 选择"完成修复"（确认修复完成）
+用户: 选择"完成修复"
 AI:  修复已应用，请验证...
      [用户验证成功]
      [清理埋点]
-     → AskUserQuestion(清空日志/继续修复/完成修复)
+     → AskUserQuestion(清空日志/添加更多埋点/分析日志 & 修复/完成修复)
 
 用户: 选择"完成修复"
 AI:  调试完成！
@@ -139,7 +150,8 @@ async function afterAction() {
       header: "下一步",
       options: [
         { label: "清空日志", description: "清空当前会话的 *.log 文件内容" },
-        { label: "继续修复", description: "埋点的范围不够全面，需要再次添加更多的埋点" },
+        { label: "添加更多埋点", description: "埋点的范围不够全面，需要再次添加更多的埋点" },
+        { label: "分析日志 & 修复", description: "用户已经复现了，需要分析日志文件并分析和修复" },
         { label: "完成修复", description: "用户验证后，认为 BUG 已经修复完毕了，需要清空埋点代码" }
       ]
     }]
@@ -154,16 +166,22 @@ async function afterAction() {
       // 清空后继续 AskUserQuestion
       await afterAction();
       break;
-    case "继续修复":
-      // 继续当前工作
-      await continueWork();
+    case "添加更多埋点":
+      // 添加更多埋点
+      await addMoreBreakpoints();
+      // 完成后再次 AskUserQuestion
+      await afterAction();
+      break;
+    case "分析日志 & 修复":
+      // 分析日志并修复
+      await analyzeAndFix();
       // 完成后再次 AskUserQuestion
       await afterAction();
       break;
     case "完成修复":
-      // 进入下一阶段
-      await nextStage();
-      // 完成后再次 AskUserQuestion
+      // 清空埋点代码，结束调试
+      await cleanupBreakpoints();
+      // 完成后再次 AskUserQuestion（或结束）
       await afterAction();
       break;
   }
@@ -175,6 +193,6 @@ async function afterAction() {
 ## 通用规则
 
 1. **每次对话回合后必须调用 AskUserQuestion**
-2. **固定选项**：始终使用三个固定选项
+2. **固定选项**：始终使用四个固定选项（清空日志/添加更多埋点/分析日志 & 修复/完成修复）
 3. **不自动推进**：等待用户明确选择后才能继续
 4. **循环调用**：选择后继续工作，然后再次调用 Question

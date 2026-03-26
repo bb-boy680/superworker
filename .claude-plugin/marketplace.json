@@ -1,0 +1,16 @@
+{
+    "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+    "name": "auto-worker",
+    "description": "Development marketplace for Superpowers core skills library",
+    "owner": {
+        "name": "Your Name",
+        "email": "your@email.com"
+    },
+    "plugins": [
+        {
+            "name": "auto-worker",
+            "source": "./",
+            "description": "Adds a /quality-review skill for quick code reviews"
+        }
+    ]
+}
