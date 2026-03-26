@@ -17,11 +17,10 @@ const { state: fileState } = useFileTree()
             / {{ fileState.currentPath }}
           </span>
         </div>
-        <span v-if="fileState.isLoading" class="ml-2 text-xs text-primary">加载中...</span>
       </header>
 
       <main class="flex-1 overflow-hidden">
-        <NuxtPage />
+        <NuxtPage :keepalive="true" />
       </main>
     </UiSidebarInset>
   </UiSidebarProvider>

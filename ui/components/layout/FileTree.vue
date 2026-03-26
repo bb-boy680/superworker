@@ -5,26 +5,10 @@ import { useFileTree } from '~/composables/useFileTree'
 
 const route = useRoute()
 const router = useRouter()
-const { state: fileState } = useFileTree()
+const { state: fileState, toggleFolder, loadFile } = useFileTree()
 
-// 展开/折叠状态
-const expandedFolders = ref<Set<string>>(new Set())
-
-function toggleFolder(path: string) {
-  if (expandedFolders.value.has(path)) {
-    expandedFolders.value.delete(path)
-  } else {
-    expandedFolders.value.add(path)
-  }
-}
-
-// 当前选中文件路径（从路由获取）
-const currentPath = computed(() => {
-  const slug = route.params.slug
-  return slug && Array.isArray(slug) && slug.length > 0
-    ? slug.join('/')
-    : null
-})
+// 当前选中文件路径（从状态获取）
+const currentPath = computed(() => fileState.currentPath)
 
 // 文件点击处理
 function handleFileClick(filePath: string, event: MouseEvent) {
@@ -34,15 +18,17 @@ function handleFileClick(filePath: string, event: MouseEvent) {
     // Ctrl/Cmd + 点击：新标签页打开
     window.open(path, '_blank')
   } else {
-    // 普通点击：路由跳转
-    router.push(path)
+    // 普通点击：直接加载文件，不触发路由导航
+    loadFile(filePath)
+    // 静默更新 URL，不触发页面刷新
+    history.replaceState(null, '', path)
   }
 }
 
 // 递归渲染文件节点
 function renderFileNode(node: any, level = 0) {
   const paddingLeft = level * 12 + 8
-  const isExpanded = expandedFolders.value.has(node.path)
+  const isExpanded = fileState.expandedFolders.has(node.path)
   const isSelected = currentPath.value === node.path
 
   return h('div', { key: node.path }, [
@@ -69,7 +55,7 @@ function renderFileNode(node: any, level = 0) {
           isExpanded ? h(FolderOpen, { class: 'h-4 w-4 shrink-0 text-muted-foreground' }) : h(Folder, { class: 'h-4 w-4 shrink-0 text-muted-foreground' }),
           h('span', { class: 'truncate font-medium' }, node.name)
         ]),
-    ...(node.children && expandedFolders.value.has(node.path)
+    ...(node.children && fileState.expandedFolders.has(node.path)
       ? node.children.map((child: any) => renderFileNode(child, level + 1))
       : [])
   ])
@@ -81,13 +67,7 @@ const fileTreeNodes = computed(() => {
 </script>
 
 <template>
-  <div v-if="fileState.isLoading" class="text-sm text-muted-foreground py-2 px-2">
-    加载中...
-  </div>
-  <div v-else-if="fileState.tree.length === 0" class="text-sm text-muted-foreground py-2 px-2">
-    暂无文档
-  </div>
-  <div v-else class="space-y-0.5 py-1">
+  <div class="space-y-0.5 py-1">
     <component :is="node" v-for="node in fileTreeNodes" :key="node.key" />
   </div>
 </template>
