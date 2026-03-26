@@ -1,0 +1,48 @@
+{
+  // Phase 1: 初步模块解析
+  "modules": [
+    {
+      // 模块的唯一标识符，通常使用 UUID（通用唯一识别码）来确保每个模块都有一个独特的 ID
+      "id": "uuid",
+      // 模块的名称，用于标识模块的功能或用途
+      "name": "AI 模块",
+      // 模块的路径，可以是文件路径、URL 或者其他标识符，用于定位模块的位置
+      "paths": ["模块路径"],
+      // 模块的详细描述信息
+      "description": "这是一个 AI 模块，用于处理自然语言理解和生成任务。",
+      // 使用的技术栈
+      "tech_stack": ["TypeScript", "Node.js", "Sharp", "Express", "Zod"],
+      // 依赖关系，表示该模块依赖于其他模块的输出结果
+      "depend": ["uuid1", "uuid2"],
+      // 模块类型，表示模块的功能类型，可以是 feature（功能模块）、shared（共享模块）或者 core（核心模块）
+      "module_type": "feature（功能）/ shared（共享）/ core（核心）"
+    }
+  ],
+  // Phase 2: 智能模块合并
+  "merge_modules": {
+    // pending_modules: 表示当前处于待处理状态的模块列表，包含了所有尚未开始处理的模块信息
+    "pending_modules": [
+      {
+        "id": "uuid",
+        "name": "AI核心引擎",
+        "description": "包含AI Agent执行引擎、AI模型交互层、配置与环境管理、MCP基础设施等核心模块，负责AI智能代理的任务规划、执行和模型交互",
+        "depend_paths": ["模块路径"],
+        "source_module_ids": ["uuid1", "uuid2"]
+      }
+    ],
+    // progress_modules: 表示当前处于处理中状态的模块列表，包含了所有正在处理的模块信息
+    "progress_modules": [],
+    // completed_modules: 表示当前处于已完成状态的模块列表，包含了所有已经完成的模块信息
+    "completed_modules": []
+  },
+  // total_modules: 表示所有模块的总数
+  "total_modules": 12,
+  // pending_modules: 表示当前处于待处理状态的模块数量
+  "pending_modules": 1,
+  // progress_modules: 表示当前处于处理中状态的模块数量
+  "progress_modules": 0,
+  // completed_modules: 表示当前处于已完成状态的模块数量
+  "completed_modules": 0,
+  // status: 当前执行步骤状态
+  "status": "pending"
+}

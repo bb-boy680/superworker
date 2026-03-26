@@ -1,0 +1,25 @@
+{
+  "files": {
+    "pending_files": [
+      {
+        // 唯一标识符，uuid方式生成
+        "id": "uuid",
+        // 文件路径，相对于项目根目录
+        "path": ".worker/wiki/zh/架构设计.md",
+        // 文件名称，不包含扩展名
+        "name": "架构设计",
+        // 文件描述
+        "description": "系统架构设计文档",
+        // 依赖的文件列表、必须是准确的文件 path，在 Step4 中会根据这些依赖关系生成专业化的 markdown 文档数据
+        "depend_files": ["path"]
+      }
+    ],
+    "progress_files": [],
+    "completed_files": []
+  },
+  "total_files": 0,
+  "pending_files": 0,
+  "progress_files": 0,
+  "completed_files": 0,
+  "status": "pending"
+}

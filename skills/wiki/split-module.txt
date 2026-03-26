@@ -1,0 +1,23 @@
+改造计划有点不合理、我需要扫描时都是 AI 在扫描、然后再进行合并、而不是根据 config.yaml 的配置
+  我有一个初步的想法：
+  1、先初步的解析模块、可以按照当前的形势来、然后进入第二步
+  2、识别第一步的解析模块、然后按照功能对模块进行合并（这一步及其关键、他会直接影响后续的 wiki 文件结构的生成和质量、一步错步步错）
+
+  为什么需要对模块进行合并、因为这是给后面的步骤生成 wiki 文件结构的、如果按照目录并且没有合并的模块来生成、就会导致文件夹很多很乱
+  直接导致阅读者无法定位
+
+  设计到的文件：
+  .claude\skills\wiki\agents\module-scanner.md
+  .claude\skills\wiki\references\split-module.md
+  .claude\skills\wiki\references\project-type-strategies.md
+  .claude\skills\wiki\references\powers\frontend-module.md
+  .claude\skills\wiki\assets\modules-example.json
+  .claude\skills\wiki\scripts\module-manager.js
+
+  .claude\skills\wiki\references\project-type-strategies.md 这个文件有涉及到如何拆解前端项目的、我需要把如何拆解前端项目的放到 powers 目录里面、作为目录拆解的能力增强
+  然后
+  .claude\skills\wiki\references\project-type-strategies.md
+  .claude\skills\wiki\references\split-module.md
+  这两个文件合并到一起、只保留 split-module 就可以了
+
+  module-scanner 只保留关键步骤、具体的模块拆分和合并放在 .claude\skills\wiki\references\split-module.md
