@@ -1,0 +1,51 @@
+{
+  "name": "auto-worker",
+  "version": "1.0.0",
+  "description": "AI Auto Worker - Wiki Viewer Dashboard",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "auto-worker": "./cli/index.cjs"
+  },
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "start": "node .output/server/index.mjs",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@vueuse/core": "^11.0.0",
+    "chokidar": "^3.6.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "markstream-vue": "0.0.10-beta.3",
+    "mermaid": "^11.13.0",
+    "radix-vue": "^1.9.0",
+    "reka-ui": "^2.9.2",
+    "shiki": "^4.0.2",
+    "stream-markdown": "^0.0.14",
+    "tailwind-merge": "^2.5.0",
+    "uuid": "^10.0.0",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@nuxt/devtools": "^1.6.0",
+    "@oxc-minify/binding-win32-x64-msvc": "^0.121.0",
+    "@oxc-parser/binding-win32-x64-msvc": "^0.121.0",
+    "@oxc-resolver/binding-win32-x64-msvc": "^11.19.1",
+    "@oxc-transform/binding-win32-x64-msvc": "^0.121.0",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
+    "autoprefixer": "^10.4.20",
+    "lucide-vue-next": "^1.0.0",
+    "nuxt": "^3.14.0",
+    "postcss": "^8.4.47",
+    "shadcn-nuxt": "^2.4.3",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.0",
+    "vue-tsc": "^2.1.0"
+  }
+}

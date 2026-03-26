@@ -1,3 +1,5 @@
 .worker
 .claude
 .worktrees
+node_modules
+.nuxt
