@@ -10,7 +10,7 @@ function buildTree(dir: string, basePath: string): FileNode[] {
     .filter(item => !item.name.startsWith('.'))
     .map(item => {
       const fullPath = path.join(dir, item.name)
-      const relativePath = path.relative(basePath, fullPath)
+      const relativePath = path.relative(basePath, fullPath).replace(/\\/g, '/')
       const node: FileNode = {
         name: item.name,
         path: relativePath,
