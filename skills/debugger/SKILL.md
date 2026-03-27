@@ -1,209 +1,199 @@
 ---
 name: debugger
 description: |
-  代码调试助手，通过"埋点-分析-修复-清理"三步法定位并修复 bug。
+  代码调试助手，通过"埋点 → 分析修复 → 清理"定位并修复 bug。
 
-  MAKE SURE to use this skill whenever the user mentions:
-  - bugs, errors, exceptions, crashes, stack traces
-  - debugging, troubleshooting, fixing issues, fixing code
-  - code not working as expected, unexpected behavior
-  - tracing execution flow, tracing code
-  - test failures, failing tests, broken tests
-  - "not working", "is broken", "has a bug"
+  埋点规则：前端用 HTTP fetch，后端用文件写入，禁用 console.log。
 
-  This skill MUST be used for ALL debugging tasks - do not attempt to debug without it.
-  Even if the user asks a simple question like "why is this not working", use this skill.
-  Even if the user provides a stack trace and seems to want a quick answer, use this skill.
+  触发场景：用户提到 bug、error、异常、调试、代码不工作、测试失败等。
 ---
 
 # Debugger Skill
 
-三步调试法：**埋点 → 分析 → 修复 → 清理**
-
-**⚠️ 重要规则：每次对话回合结束后，必须调用 AskUserQuestion 引导用户选择下一步操作**
-
-> 详细配置参考：`references/workflow.md`
-
-## ⚠️ 步骤锁（严禁跳步）
-
-本 skill 必须严格按照以下顺序执行：
-
-```
-前置步骤 → 步骤1（埋点）→ 步骤2（分析+修复）→ 步骤3（清理）
-  ↓必须      ↓必须完成      ↓必须完成            ↓必须完成
-  完成       才能进入       才能进入              才能执行
-```
-
-**跳步后果**：修复无效、引入新 bug、问题复发、治标不治本。
-
-**强制规则**：
-1. 前置步骤未完成 → 禁止开始
-2. 未埋点 → 禁止分析
-3. 未分析 → 禁止修复
-4. 未验证 → 禁止清理
+**流程**：埋点 → 分析 & 修复 → 清理
 
 ---
 
-## 前置步骤（必须）
+## 核心配置
 
-**开始对话前必须设置环境变量和工作目录**：
+每次回复末尾，用以下配置询问用户下一步：
 
-```bash
-# 确保在项目根目录
-pwd
-
-# 设置环境变量
-export DEBUG_SESSION_ID=$(grep DEBUG_SESSION_ID ${pwd}/.worker/.env | cut -d'=' -f2)
-export DEBUG_PORT=$(grep port ${pwd}/.worker/debug/config.yaml | cut -d' ' -f2)
+```
+AskUserQuestion({
+  questions: [{
+    question: "请选择下一步操作",
+    header: "下一步",
+    options: [
+      { label: "清空日志", description: "清空 *.log 文件内容（不删除文件）" },
+      { label: "添加更多埋点", description: "继续添加埋点" },
+      { label: "分析日志 & 修复", description: "分析日志并修复代码" },
+      { label: "完成修复", description: "清理埋点代码，结束调试" }
+    ]
+  }]
+})
 ```
 
-> ⚠️ **重要提醒**：操作前必须确认当前工作目录是项目根目录。使用相对路径时，AI 可能会读取到错误的工作目录。
+### 清空日志
 
-> 详细说明参考：`references/env.md`
+用户选择"清空日志"时执行：
+
+```bash
+echo "" > "$(pwd)/.worker/debug/logs/${DEBUG_SESSION_ID}.log"
+```
+
+**注意**：只清空文件内容，不删除文件。
+
+---
+
+## 步骤 0：初始化
+
+触发时立即执行：
+
+```bash
+# 设置环境变量
+export DEBUG_SESSION_ID=$(grep DEBUG_SESSION_ID $(pwd)/.worker/.env | cut -d'=' -f2)
+export DEBUG_PORT=$(grep port $(pwd)/.worker/debug/config.yaml | cut -d' ' -f2)
+
+# 验证
+echo "DEBUG_SESSION_ID=$DEBUG_SESSION_ID"
+echo "DEBUG_PORT=$DEBUG_PORT"
+```
+
+**日志路径**：`$(pwd)/.worker/debug/logs/${DEBUG_SESSION_ID}.log`
+
+### 搜索文件流程
+
+**每次搜索前**，先读取 exclude 配置：
+
+```bash
+cat $(pwd)/.worker/debug/config.yaml
+```
+
+根据 `exclude` 字段过滤搜索结果。
+
+**示例**：假设 config.yaml 中 `exclude: [node_modules, dist, .git]`
+
+**Glob 调用**：
+```
+Glob({ pattern: "**/*.{js,ts}" })
+→ 结果过滤：跳过路径包含 node_modules/dist/.git 的文件
+```
+
+**Grep 调用**：
+```
+Grep({ pattern: "handleError", glob: "**/*.{js,ts}" })
+→ 结果过滤：跳过路径包含 node_modules/dist/.git 的文件
+```
+
+**流程**：读配置 → 搜索 → 过滤结果
 
 ---
 
 ## 步骤 1：添加埋点
 
-**目标**：在关键位置插入日志代码。
+### 每个文件埋点前的流程
 
-### 1.1 读取配置
-
-读取 `.worker/debug/config.yaml` 获取 `port` 和项目类型规则。
-
-从环境变量获取 Session ID：
-```javascript
-const sessionId = process.env.DEBUG_SESSION_ID;
+```
+针对文件 X → 读取 config.yaml 判断环境 → 选择埋点方式 → 添加埋点
 ```
 
-### 1.2 插入埋点代码块
+**判断步骤**：
 
-**⚠️ 强制规则**：每个埋点必须是**完全独立的折叠块**，包含完整自包含的代码。
+1. **读取配置**：`cat .worker/debug/config.yaml`
+2. **匹配环境**：根据 `frontend` / `backend` 的 glob 模式，判断当前文件属于哪个环境
+3. **选择埋点方式**：
+   - 匹配 frontend → HTTP fetch
+   - 匹配 backend → 文件写入
+   - 都不匹配 → 根据文件特征判断（如 `*.server.ts` → 后端）
 
-| 禁止行为 | 示例 |
-|---------|------|
-| ❌ 创建辅助函数多处调用 | `const sendDebugLog = (label, data) => { ... }` |
-| ❌ 在文件顶部放置共享函数 | `function debugLog(...) { ... }` 放在文件开头 |
-| ❌ 引用外部模块 | `import { debugHelper } from './debug'` |
-| ❌ 多个埋点共享同一段代码 | 同一文件内多处调用同一个函数 |
+**下一个文件埋点时，重复上述流程**。
 
-**正确做法**：每个埋点位置都插入完整的、重复的 fetch/日志代码，即使代码看起来重复。
+### 埋点代码模板
 
-> 详细说明、代码示例和错误示范参考：`references/implementation.md`
+**前端**（HTTP）：
+```javascript
+// #region DEBUG [sessionId: {{DEBUG_SESSION_ID}}, port: {{DEBUG_PORT}}]
+fetch('http://localhost:${DEBUG_PORT}/debug/log?session_id=${DEBUG_SESSION_ID}', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    location: '文件名:行号',
+    message: '[位置:描述]',
+    data: { /* 变量快照 */ }
+  })
+}).catch(() => {});
+// #endregion DEBUG
+```
 
-### 1.3 对话回合结束
+**后端**（文件写入，使用绝对路径）：
+```javascript
+// #region DEBUG [sessionId: {{DEBUG_SESSION_ID}}, port: {{DEBUG_PORT}}]
+import('fs').then(fs => fs.appendFileSync('{{$(pwd)}}/.worker/debug/logs/{{DEBUG_SESSION_ID}}.log',
+  JSON.stringify({ location: '文件名:行号', message: '[位置:描述]', data: {}, timestamp: Date.now() }) + '\n'
+)).catch(() => {});
+// #endregion DEBUG
+```
 
-每次对话回合结束后，**必须使用 AskUserQuestion 询问用户**。
+> 更多语言模板见：`references/implementation.md`
 
-> **⚠️ 强制使用固定选项**：清空日志 / 继续修复 / 完成修复
->
-> 详细执行逻辑参考：`references/workflow.md`
+**要点**：
+- 每个埋点独立，不创建共享函数，便于清理
+- HTTP 日志服务持续运行，不需要检查或启动服务
+- 不要改用 console.log 或其他方式
 
 ---
 
-## 步骤 2：日志分析 & 代码修复
+## 步骤 2：分析 & 修复
 
-**目标**：运行代码，分析日志，定位并修复问题。
+**前提**：用户已复现 bug，日志已生成。
 
-### 🚨 步骤2 入口检查
-
-**进入步骤2 必须满足**：
-- [ ] 步骤1 已完成（埋点已添加）
-- [ ] **用户已明确确认复现了 BUG**
-- [ ] 日志文件已生成且有数据
-
-**⚠️ 严禁**：自动轮询等待、假设用户已操作、未获确认就分析。
-
-### 2.1 分析日志
-
-**Checklist**：
-- [ ] 已确认当前工作目录是项目根目录 (`pwd`)
-- [ ] 已读取日志文件（使用绝对路径）
-- [ ] 日志中有预期的埋点输出
-- [ ] 已按时间顺序整理执行路径
-
-**读取日志**（使用绝对路径避免目录错误）：
 ```bash
-# 确认目录
-pwd
-
-# 使用绝对路径读取
 cat "$(pwd)/.worker/debug/logs/${DEBUG_SESSION_ID}.log"
 ```
 
-**分析要点**：
-- 执行路径是否符合预期？
-- 变量值是否正确？
-- 边界条件处理是否有问题？
-- 异步操作时序是否正常？
+分析执行路径和变量值，定位问题后修复代码。
 
-### 2.2 修复代码
+**搜索代码时**：应用 config.yaml 的 exclude 配置过滤结果。
 
-**修复前必须**：
-- [ ] 通过日志分析定位根因
-- [ ] 能在日志中找到问题证据
-- [ ] 已确定修复方案（最小改动原则）
-
-### 2.3 对话回合结束
-
-每次对话回合结束后，**必须使用 AskUserQuestion 询问用户**。
-
-> **⚠️ 强制使用固定选项**：清空日志 / 继续修复 / 完成修复
->
-> 详细执行逻辑参考：`references/workflow.md`
+**如果需要添加更多埋点**：使用 HTTP fetch（前端）或文件写入（后端），不要用 console.log。
 
 ---
 
-## 步骤 3：移除埋点
+## 步骤 3：清理
 
-**目标**：清理所有调试埋点。
-
-**⚠️ 必须等待用户确认修复成功后才能执行！**
-
-### 3.1 清理埋点
-
-#### 清空日志（仅清空日志文件）
+用户确认修复成功后执行：
 
 ```bash
-node <skill-path>/scripts/clear-log.js [选项]
+# 只清理当前会话的埋点（根据 sessionId 匹配）
+sed -i '/#region DEBUG \[sessionId: ${DEBUG_SESSION_ID}/,/#endregion DEBUG/d' 文件名
 ```
-
-**选项**：`--all`（清空所有）、`--session`（指定会话）
-
-#### 清理埋点代码（删除埋点代码块）
-
-```bash
-node <skill-path>/scripts/cleanup.js <文件或目录> [选项]
-```
-
-**选项**：`--dry-run`（预览）、`--backup`（备份）、`--verbose`（详细）
-
-**手动清理**（备选）：
-```bash
-sed -i '/#region DEBUG/,/#endregion DEBUG/d' 文件名
-```
-
-### 3.2 清理原则
-
-- 只删除 `[DEBUG]` 埋点
-- 保留原有日志代码
-
-### 3.3 对话回合结束
-
-每次对话回合结束后，**必须使用 AskUserQuestion 询问用户**。
-
-> **⚠️ 强制使用固定选项**：清空日志 / 继续修复 / 完成修复
->
-> 详细执行逻辑参考：`references/workflow.md`
 
 ---
 
-## 快速检查清单
+## 完整示例
 
-| 问题类型 | 埋点重点 |
-|---------|---------|
-| 逻辑错误 | 条件分支走向 |
-| 数据异常 | 变量赋值前后 |
-| 性能问题 | 耗时操作前后 |
-| 异步问题 | 回调/Promise 状态 |
-| 空指针 | 对象属性访问前 |
+```
+用户：我的代码有 bug
+AI：  [执行初始化，设置环境变量]
+      [用 AskUserQuestion 询问下一步]
+
+用户：添加更多埋点
+AI：  [添加埋点 - 用 HTTP fetch 或文件写入，不用 console.log]
+      [用 AskUserQuestion 询问下一步]
+
+用户：分析日志 & 修复
+AI：  [分析日志，修复代码]
+      [用 AskUserQuestion 询问下一步]
+
+用户：完成修复
+AI：  [清理埋点]
+      [调试结束]
+```
+
+**埋点方式提醒**：
+- 前端：`fetch('http://localhost:${DEBUG_PORT}/debug/log?session_id=${DEBUG_SESSION_ID}', {...})`
+- 后端：`await import('fs').then(fs => fs.appendFileSync(...))`
+
+---
+
+> 埋点的详细示例和多语言模板见：`references/implementation.md`
